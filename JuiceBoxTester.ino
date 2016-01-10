@@ -9,10 +9,12 @@ const int defaultIgain = 0x7530;
 
 // WHAT KIND OF BOARD IS THIS?
 //--- v8.12.1 ~ v8.12.3
-//#define trim120current
+#define trim120current
 //--- v8.12.1 only
 //#define V8121
 //--- v8.12.4+ no options
+
+//#define CLASSIC
 
 // Buzzer?
 #define BUZZER_PUI
@@ -45,7 +47,6 @@ const byte pin_Buzzer=13; // control button 3 ("A" on the remote, receiver pin 0
   const byte pin_throttle120=0; // when RTC is not used, this is an input used to set 120V target current (0-30A range)
 #else
 const byte pin_GFI_voltage=0;
-const byte pin_host_pV=0;
 #endif
 const byte pin_V = 1; // GMI input (misleading label)
 const byte pin_therm = 2; // thermistor
@@ -64,6 +65,12 @@ int ii=0, zz=0;
 unsigned long tempLong;
 float tempFloat;
 
+#ifdef CLASSIC
+int GFI_V_SENSE = 0;
+int max_GFI_V_SENSE = 0;
+unsigned int classicVSenseStop;
+#endif
+
 boolean dropOut; // flag if only one test is being run
 unsigned int minefield = 0; // bitmask of failed tests
 
@@ -77,6 +84,7 @@ byte testState = 0;
 #define TEST_GMI 2
 #define TEST_GFI 3
 #define TEST_RELAY 4
+#define TEST_VSENSE 10
 #define TEST_EMETER 5
 #define TEST_TEMP 6
 #define TEST_BUZZER 7
@@ -153,12 +161,23 @@ void loop() {
       Serial.print(F(", set timer for 400msec, enable GFI test relay, test for trip "));
       digitalWrite(pin_GFItest,HIGH);
       tempLong = millis() + 400; // JB firmware only gives it 400msec
+#ifdef CLASSIC
+      classicVSenseStop = millis() + 130; // JB firmware only runs approx 130msec of testing
+#endif
       ii = 0;
       while (millis() < tempLong) {
         if (digitalRead(pin_GFI)) {
           ii = (tempLong - millis());
           tempLong = millis();
         }
+#ifdef CLASSIC
+        if (millis() < classicVSenseStop) {
+          GFI_V_SENSE = analogRead(pin_GFI_voltage);
+          if(GFI_V_SENSE > max_GFI_V_SENSE) {
+              max_GFI_V_SENSE = GFI_V_SENSE;
+          }
+        }
+#endif
       }
       digitalWrite(pin_GFItest,LOW);
       passFail(ii);
@@ -186,8 +205,23 @@ void loop() {
       Serial.print(digitalRead(pin_GFI),DEC);
       digitalWrite(pin_relay,LOW);
       Serial.println();
+#ifdef CLASSIC
+      testState = TEST_VSENSE;
+#else
       testState = TEST_EMETER;
+#endif
       break;
+#ifdef CLASSIC
+    case TEST_VSENSE:
+      Serial.print(F("Verifying v8.12.4 Vsense: "));
+      tempFloat = 5.0*((float)max_GFI_V_SENSE/1024.0);
+      tempFloat *= 100;
+      Serial.print(tempFloat); Serial.print("V ");
+      passFail(tempFloat > 200);
+      Serial.println();
+      testState = TEST_TEMP;
+      break;
+#else
     case TEST_EMETER:
       Serial.print(F("Testing Emeter - init "));
       eMeter.begin(&MeterSerial,&Serial); // No debug serial in production
@@ -204,6 +238,7 @@ void loop() {
       Serial.println();
       testState = TEST_TEMP;
       break;
+#endif
     case TEST_TEMP:
       Serial.print(F("Testing temp sensor... "));
       ii = analogRead(pin_therm);
@@ -254,6 +289,15 @@ void loop() {
           }
         }
         Serial.println();
+        Serial.print(F("Testing 120 - set to 15A"));
+        tempLong = millis();
+        while (getAmps(pin_throttle120) != 15) {
+          if (millis() > tempLong) {
+            Serial.print(getAmps(pin_throttle120),DEC); Serial.print(' ');
+            tempLong = millis() + 1000;
+          }
+        }
+        Serial.println();        
       #endif
       Serial.print(F("Testing 240 - set to 0%"));
       tempLong = millis();
@@ -387,5 +431,18 @@ void buzz(byte disposition) {
       tone(pin_Buzzer,932,1000); // beep 250ms
       break;
   }      
+}
+
+char getAmps(byte analogPin) {
+  const float nominal_outC_120V = 12;
+  float throttle;
+  float outC;
+#ifdef trim120current  
+  throttle=analogRead(analogPin)/1024.;
+  outC=throttle*nominal_outC_120V*2; // full range is 2x of nominal
+  return outC;
+#else
+  return 15;
+#endif
 }
 
