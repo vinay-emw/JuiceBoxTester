@@ -9,12 +9,12 @@ const int defaultIgain = 0x7530;
 
 // WHAT KIND OF BOARD IS THIS?
 //--- v8.12.1 ~ v8.12.3
-#define trim120current
+//#define trim120current
 //--- v8.12.1 only
 //#define V8121
 //--- v8.12.4+ no options
 
-//#define CLASSIC
+#define CLASSIC
 
 // Buzzer?
 #define BUZZER_PUI
@@ -162,23 +162,35 @@ void loop() {
       digitalWrite(pin_GFItest,HIGH);
       tempLong = millis() + 400; // JB firmware only gives it 400msec
 #ifdef CLASSIC
-      classicVSenseStop = millis() + 130; // JB firmware only runs approx 130msec of testing
+      classicVSenseStop = millis() + 130; // JB firmware runs approx 130msec of testing
 #endif
       ii = 0;
-      while (millis() < tempLong) {
-        if (digitalRead(pin_GFI)) {
-          ii = (tempLong - millis());
-          tempLong = millis();
-        }
 #ifdef CLASSIC
+// sense voltage while doing GFI test
+      while (millis() < classicVSenseStop) {
         if (millis() < classicVSenseStop) {
           GFI_V_SENSE = analogRead(pin_GFI_voltage);
           if(GFI_V_SENSE > max_GFI_V_SENSE) {
               max_GFI_V_SENSE = GFI_V_SENSE;
           }
         }
-#endif
       }
+// then, complete the GFI test
+      while (millis() < tempLong) {
+        if (digitalRead(pin_GFI)) {
+          ii = (tempLong - millis());
+          tempLong = millis();
+        }
+      }
+#else
+// just run GFI test
+      while (millis() < tempLong) {
+        if (digitalRead(pin_GFI)) {
+          ii = (tempLong - millis());
+          tempLong = millis();
+        }
+      }
+#endif
       digitalWrite(pin_GFItest,LOW);
       passFail(ii);
       Serial.print(F(" in ")); Serial.print(400-ii); Serial.println(" msec");
