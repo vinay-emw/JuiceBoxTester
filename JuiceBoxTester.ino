@@ -9,12 +9,12 @@ const int defaultIgain = 0x7530;
 
 // WHAT KIND OF BOARD IS THIS?
 //--- v8.12.1 ~ v8.12.3
-//#define trim120current
+#define trim120current
 //--- v8.12.1 only
 //#define V8121
 //--- v8.12.4+ no options
 
-#define CLASSIC
+//#define CLASSIC
 
 // Buzzer?
 #define BUZZER_PUI
@@ -248,9 +248,14 @@ void loop() {
       Serial.print(tempFloat); Serial.print(' ');
       passFail((tempFloat > 59) && (tempFloat < 61));
       Serial.println();
+#ifdef V8121
+      testState = TEST_BUZZER;
+#else
       testState = TEST_TEMP;
+#endif
       break;
 #endif
+#ifndef V8121
     case TEST_TEMP:
       Serial.print(F("Testing temp sensor... "));
       ii = analogRead(pin_therm);
@@ -260,6 +265,7 @@ void loop() {
       Serial.println();
       testState = TEST_BUZZER;
       break;
+#endif
     case TEST_BUZZER:
       Serial.println(F("Testing buzzer..."));
       buzz(BUZZ_TEST);
