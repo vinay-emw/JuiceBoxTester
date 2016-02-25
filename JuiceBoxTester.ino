@@ -90,6 +90,8 @@ byte testState = 0;
 #define TEST_BUZZER 7
 #define TEST_TRIMPOT 8
 #define TEST_EEPCLEAR 9
+#define FN_RLHIGH 'H'
+#define FN_RLLOW 'L'
 #define TEST_DONE 254
 
 #define BUZZ_HAPPY 0
@@ -109,7 +111,8 @@ void setup() {
 void loop() {
   while (Serial.available()) Serial.read(); // clear buffer
   // put your main code here, to run repeatedly:
-  Serial.print(testState,DEC);
+  if (testState <= 9) Serial.print(testState,DEC);
+  else Serial.print(testState);
   Serial.print(": ");
   switch (testState) {
     case TEST_INIT:
@@ -364,6 +367,16 @@ void loop() {
       if (minefield) buzz(BUZZ_SAD); else buzz(BUZZ_HAPPY);
       while (!Serial.available()) ;
       break;
+    case FN_RLHIGH:    
+      Serial.print(F("Relay is ON, GFI trip = "));
+      Serial.println(digitalRead(pin_GFI),DEC);
+      digitalWrite(pin_relay,HIGH);
+      break;
+    case FN_RLLOW:
+      Serial.print(F("Relay is OFF, GFI trip = "));
+      Serial.println(digitalRead(pin_GFI),DEC);
+      digitalWrite(pin_relay,LOW);
+      break;
     default:
       testState++; // skip whatever
       break;
@@ -372,7 +385,8 @@ void loop() {
   if (Serial.available()) {
     str[0] = Serial.read();
     str[1] = 0;
-    testState = atoi(str);
+    if ((str[0] >= '0') && (str[0] <= '9')) testState = atoi(str);
+    else if ((str[0] >= 'A') && (str[0] <= 'Z')) testState = str[0];
     dropOut = true;
   }
   Serial.flush();
